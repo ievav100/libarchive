@@ -18,7 +18,8 @@ jobs:
         with:
           run-in-vm: |
             set -eux
-            freebsd-version -ku
+            uname -r
+            freebsd-version -u
             test ! -x /usr/bin/cc
             test ! -f /usr/include/sys/types.h
             # Verify the base archive before replacing files in the VM.
