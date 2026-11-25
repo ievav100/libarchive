@@ -1,12 +1,15 @@
-name: CI
+name: Verify only the FreeBSD compiler and headers are restored
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [codex/verify-freebsd-toolchain-only-20261125]
 
 permissions:
   contents: read
 
 jobs:
   FreeBSD:
+    if: github.repository == 'ievav100/libarchive'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,13 +20,21 @@ jobs:
       uses: acj/freebsd-firecracker-action@ee77f05b7e0e9618b4c8134aa74b2c6d56779563 # v0.13.0
       with:
         run-in-vm: |
-          # Verify the base archive before replacing files in the VM.
+          # Verify the base archive before restoring the missing toolchain.
           base_archive=$(mktemp /tmp/libarchive-freebsd-base.XXXXXX) && \
           trap 'rm -f "$base_archive"' EXIT && \
           fetch -o "$base_archive" https://download.freebsd.org/releases/amd64/15.1-RELEASE/base.txz && \
           sha256 -c 3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f "$base_archive" && \
-          chflags -R noschg / && \
-          bsdtar -x -C / -f "$base_archive" && \
+          config_sha256=$(sha256 -q /etc/rc.conf) && \
+          bsdtar -x --keep-old-files --no-fflags -C / -f "$base_archive" \
+            --include='./usr/include' --include='./usr/include/*' \
+            --include='./usr/lib/clang' --include='./usr/lib/clang/*' \
+            --include='./usr/lib/*.a' \
+            --include='./usr/bin/cc' --include='./usr/bin/c++' --include='./usr/bin/cpp' \
+            --include='./usr/bin/clang*' --include='./usr/bin/ld' --include='./usr/bin/ld.lld' && \
+          test "$config_sha256" = "$(sha256 -q /etc/rc.conf)" && \
+          test -f /usr/include/sys/types.h && \
+          /usr/bin/cc --version && \
           rm -f "$base_archive" && \
           pkg bootstrap -y && \
           cd firecracker-freebsd && \
